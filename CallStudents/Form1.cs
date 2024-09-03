@@ -12,7 +12,9 @@ namespace CallStudents
 
         public Form1()
         {
+            //.NET平台自動執行，主要的工作是做一些初始化的工作。
             InitializeComponent();
+
             //創建實體，這樣才可為NULL
             synthesizer = new SpeechSynthesizer();
 
@@ -126,14 +128,14 @@ namespace CallStudents
             this.Controls.Add(studentButton);
         }
 
-        // 定義一個SemaphoreSlim物件，用來控制對共享資源的並發存取。
-        // 此處設置為1，表示最多只有一個執行緒可以同時進入臨界區域。
-        private SemaphoreSlim _semaphore = new SemaphoreSlim(1, 1);
+        // SemaphoreSlim 用來控制同一時刻允許多少個線程的輕量級信號量
+        // SemaphoreSlim(初始計數,最大計數)，也能直接寫(1)
+        private SemaphoreSlim _semaphore = new SemaphoreSlim(1,1);
 
         //播放學生名稱方法
         private async Task PlayStudentNameAsync(string name)
         {
-            // 等待獲取SemaphoreSlim的鎖，如果有其他執行緒在使用該資源，則當前執行緒會被阻塞。
+            // WaitAsync是SemaphoreSlim的非同步方法。確保在同一時間只允許一個線程進行播放操作。
             await _semaphore.WaitAsync();
 
             try
@@ -141,19 +143,20 @@ namespace CallStudents
                 // 創建一個TaskCompletionSource，用來在Speak完成時通知異步任務。
                 var tcs = new TaskCompletionSource<object?>();
 
-                // 定義SpeakCompleted事件處理器，用來在語音合成完成時設置TaskCompletionSource的結果。
+                // 用來處理 synthesizer.SpeakCompleted 事件的委派 handler是變數
                 EventHandler<SpeakCompletedEventArgs>? handler = null;
+                //(s觸發者，e參數)
                 handler = (s, e) =>
                 {
                     // 移除SpeakCompleted事件處理器，避免重複調用。
                     synthesizer.SpeakCompleted -= handler;
-                    // 設置TaskCompletionSource的結果，解除Task的等待狀態。
+                    // 設置TaskCompletionSource的結果，設成NULL解除Task的等待狀態。
                     tcs.SetResult(null);
                 };
-                // 註冊SpeakCompleted事件處理器。
+                // 添加SpeakCompleted事件處理器。
                 synthesizer.SpeakCompleted += handler;
 
-                // 異步地開始語音合成，傳遞學生姓名進行語音播放。
+                // 調用synthesizer的異步方法，參數(名稱)
                 synthesizer.SpeakAsync(name);
 
                 // 等待TaskCompletionSource完成，即語音合成播放結束。
@@ -161,7 +164,7 @@ namespace CallStudents
             }
             finally
             {
-                // 釋放SemaphoreSlim的鎖，允許其他等待的執行緒進入臨界區域。
+                // 釋放SemaphoreSlim信號
                 _semaphore.Release();
             }
         }
